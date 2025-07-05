@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: billing-db
+    environment:
+      POSTGRES_USER: billing
+      POSTGRES_PASSWORD: billing
+      POSTGRES_DB: billing_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U billing -d billing_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: billing-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://billing:billing@db:5432/billing_db
+      - APP_ENV=development
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY:-pk_test_placeholder}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      - LOG_LEVEL=info
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:

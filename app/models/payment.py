@@ -1,9 +1,8 @@
 from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
 import enum
 
-from app.db.base import Base, TimestampMixin, UUIDMixin
+from app.db.base import Base, TimestampMixin, UUIDMixin, GUID
 
 
 class PaymentStatus(str, enum.Enum):
@@ -24,8 +23,8 @@ class PaymentMethod(str, enum.Enum):
 class Payment(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "payments"
 
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
-    invoice_id = Column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=True, index=True)
+    customer_id = Column(GUID(), ForeignKey("customers.id"), nullable=False, index=True)
+    invoice_id = Column(GUID(), ForeignKey("invoices.id"), nullable=True, index=True)
     stripe_payment_intent_id = Column(String(255), unique=True, nullable=True)
     stripe_charge_id = Column(String(255), nullable=True)
     amount = Column(Numeric(10, 2), nullable=False)

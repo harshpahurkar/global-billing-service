@@ -1,4 +1,5 @@
 import pytest
+import itertools
 from unittest.mock import MagicMock, patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -47,27 +48,45 @@ def client(db_session):
 def mock_stripe():
     """Mock all Stripe API calls."""
     with patch("app.services.stripe_service.stripe") as mock:
-        # Mock customer creation
-        mock_customer = MagicMock()
-        mock_customer.id = "cus_test_123"
-        mock.Customer.create.return_value = mock_customer
-        mock.Customer.modify.return_value = mock_customer
+        # Counters for unique IDs
+        _cus_counter = itertools.count(1)
+        _prod_counter = itertools.count(1)
+        _price_counter = itertools.count(1)
+        _sub_counter = itertools.count(1)
+        _inv_counter = itertools.count(1)
+
+        # Mock customer creation - unique IDs each call
+        def _create_customer(**kwargs):
+            m = MagicMock()
+            m.id = f"cus_test_{next(_cus_counter)}"
+            return m
+        mock.Customer.create.side_effect = _create_customer
+        mock.Customer.modify.return_value = MagicMock(id="cus_test_1")
         mock.Customer.delete.return_value = None
 
-        # Mock product and price creation
-        mock_product = MagicMock()
-        mock_product.id = "prod_test_123"
-        mock.Product.create.return_value = mock_product
+        # Mock product and price creation - unique IDs each call
+        def _create_product(**kwargs):
+            m = MagicMock()
+            m.id = f"prod_test_{next(_prod_counter)}"
+            return m
+        mock.Product.create.side_effect = _create_product
 
-        mock_price = MagicMock()
-        mock_price.id = "price_test_123"
-        mock.Price.create.return_value = mock_price
+        def _create_price(**kwargs):
+            m = MagicMock()
+            m.id = f"price_test_{next(_price_counter)}"
+            return m
+        mock.Price.create.side_effect = _create_price
 
-        # Mock subscription
+        # Mock subscription - unique IDs each call
+        def _create_subscription(**kwargs):
+            m = MagicMock()
+            m.id = f"sub_test_{next(_sub_counter)}"
+            m.__getitem__ = lambda self, key: {"items": {"data": [MagicMock(id="si_test")]}}[key]
+            return m
+        mock.Subscription.create.side_effect = _create_subscription
         mock_subscription = MagicMock()
-        mock_subscription.id = "sub_test_123"
+        mock_subscription.id = "sub_test_1"
         mock_subscription.__getitem__ = lambda self, key: {"items": {"data": [MagicMock(id="si_test")]}}[key]
-        mock.Subscription.create.return_value = mock_subscription
         mock.Subscription.modify.return_value = mock_subscription
         mock.Subscription.retrieve.return_value = mock_subscription
         mock.Subscription.delete.return_value = mock_subscription
@@ -82,12 +101,14 @@ def mock_stripe():
         mock_refund.id = "re_test_123"
         mock.Refund.create.return_value = mock_refund
 
-        # Mock invoice
-        mock_invoice = MagicMock()
-        mock_invoice.id = "in_test_123"
-        mock.Invoice.create.return_value = mock_invoice
-        mock.Invoice.pay.return_value = mock_invoice
-        mock.Invoice.void_invoice.return_value = mock_invoice
+        # Mock invoice - unique IDs each call
+        def _create_invoice(**kwargs):
+            m = MagicMock()
+            m.id = f"in_test_{next(_inv_counter)}"
+            return m
+        mock.Invoice.create.side_effect = _create_invoice
+        mock.Invoice.pay.return_value = MagicMock(id="in_test_1")
+        mock.Invoice.void_invoice.return_value = MagicMock(id="in_test_1")
 
         # Mock checkout session
         mock_session = MagicMock()

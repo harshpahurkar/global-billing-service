@@ -1,9 +1,8 @@
 from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, Enum as SQLEnum, Text
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
 import enum
 
-from app.db.base import Base, TimestampMixin, UUIDMixin
+from app.db.base import Base, TimestampMixin, UUIDMixin, GUID
 
 
 class InvoiceStatus(str, enum.Enum):
@@ -17,8 +16,8 @@ class InvoiceStatus(str, enum.Enum):
 class Invoice(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "invoices"
 
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
-    subscription_id = Column(UUID(as_uuid=True), ForeignKey("subscriptions.id"), nullable=True, index=True)
+    customer_id = Column(GUID(), ForeignKey("customers.id"), nullable=False, index=True)
+    subscription_id = Column(GUID(), ForeignKey("subscriptions.id"), nullable=True, index=True)
     stripe_invoice_id = Column(String(255), unique=True, nullable=True)
     invoice_number = Column(String(50), unique=True, nullable=False)
     status = Column(

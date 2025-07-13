@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Boolean
 from sqlalchemy.orm import relationship
 
-from app.db.base import Base, TimestampMixin, UUIDMixin
+from app.db.base import Base, TimestampMixin, UUIDMixin, GUID
 
 
 class Customer(Base, UUIDMixin, TimestampMixin):

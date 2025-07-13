@@ -1,5 +1,7 @@
 """Stripe API integration service layer."""
 
+from __future__ import annotations
+
 import stripe
 import structlog
 from typing import Optional, Dict, Any

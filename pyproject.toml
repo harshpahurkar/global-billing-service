@@ -1,0 +1,43 @@
+[project]
+name = "global-billing-service"
+version = "1.0.0"
+description = "Scalable billing and subscription management microservice"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Harsh Pahurkar"},
+]
+keywords = ["billing", "subscriptions", "stripe", "fastapi", "microservice"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Office/Business :: Financial",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "strict"
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/scripts/*", "*/test_*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

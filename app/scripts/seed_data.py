@@ -7,11 +7,11 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from app.db.session import SessionLocal
-from app.db.base import Base
-from app.db.session import engine
-from app.models.plan import Plan, PlanInterval
-from app.models.customer import Customer
+from app.db.session import SessionLocal  # noqa: E402
+from app.db.base import Base  # noqa: E402
+from app.db.session import engine  # noqa: E402
+from app.models.plan import Plan, PlanInterval  # noqa: E402
+from app.models.customer import Customer  # noqa: E402
 
 
 # Default plans

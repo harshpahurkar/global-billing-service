@@ -1,6 +1,5 @@
 """Invoice management service."""
 
-import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID

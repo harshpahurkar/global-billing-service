@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import Optional
-from datetime import datetime, timezone
 
 from app.db.session import get_db
 from app.models.payment import Payment, PaymentStatus

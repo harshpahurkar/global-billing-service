@@ -2,7 +2,7 @@ from sqlalchemy import Column, String, Integer, Boolean, Numeric, Enum as SQLEnu
 from sqlalchemy.orm import relationship
 import enum
 
-from app.db.base import Base, TimestampMixin, UUIDMixin, GUID
+from app.db.base import Base, TimestampMixin, UUIDMixin
 
 
 class PlanInterval(str, enum.Enum):

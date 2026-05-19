@@ -35,7 +35,12 @@ class SubscriptionService:
         plan_id: UUID,
         currency: str = "usd",
     ) -> Subscription:
-        """Create a new subscription for a customer."""
+        """Create a new subscription for a customer.
+
+        Local row is written first; Stripe is called second with an
+        idempotency key derived from the local UUID. A failed Stripe call
+        leaves the local row with stripe_subscription_id NULL for reconciliation.
+        """
         customer = self.db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
             raise CustomerNotFoundError(str(customer_id))
@@ -43,17 +48,6 @@ class SubscriptionService:
         plan = self.db.query(Plan).filter(Plan.id == plan_id, Plan.is_active.is_(True)).first()
         if not plan:
             raise PlanNotFoundError(str(plan_id))
-
-        # Create subscription in Stripe if customer has a Stripe ID
-        stripe_subscription_id = None
-        stripe_sub = None
-        if customer.stripe_customer_id and plan.stripe_price_id:
-            stripe_sub = self.stripe.create_subscription(
-                customer_id=customer.stripe_customer_id,
-                price_id=plan.stripe_price_id,
-                trial_days=plan.trial_days,
-            )
-            stripe_subscription_id = stripe_sub.id
 
         now = datetime.now(timezone.utc)
         status = SubscriptionStatus.ACTIVE
@@ -68,10 +62,10 @@ class SubscriptionService:
         subscription = Subscription(
             customer_id=customer_id,
             plan_id=plan_id,
-            stripe_subscription_id=stripe_subscription_id,
+            stripe_subscription_id=None,
             status=status,
             current_period_start=now,
-            current_period_end=now + timedelta(days=30),
+            current_period_end=now + timedelta(days=30),  # Overwritten from Stripe below
             trial_start=trial_start,
             trial_end=trial_end,
             currency=currency,
@@ -80,6 +74,18 @@ class SubscriptionService:
         self.db.add(subscription)
         self.db.commit()
         self.db.refresh(subscription)
+
+        if customer.stripe_customer_id and plan.stripe_price_id:
+            stripe_sub = self.stripe.create_subscription(
+                customer_id=customer.stripe_customer_id,
+                price_id=plan.stripe_price_id,
+                trial_days=plan.trial_days,
+                metadata={"local_id": str(subscription.id)},
+                idempotency_key=str(subscription.id),
+            )
+            subscription.stripe_subscription_id = stripe_sub.id
+            self.db.commit()
+            self.db.refresh(subscription)
 
         logger.info(
             "subscription_created",

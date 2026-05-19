@@ -23,23 +23,21 @@ router = APIRouter(
 
 @router.post("", response_model=CustomerResponse, status_code=201)
 def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)):
-    """Create a new customer with optional Stripe sync."""
-    # Check for duplicate email
+    """Create a new customer.
+
+    Local row is written first with no Stripe ID, then Stripe is called with
+    `idempotency_key=<local_id>` and `metadata={"local_id": ...}`. If the
+    Stripe call fails, the local row persists with `stripe_customer_id=NULL`
+    so a reconciliation job can retry without creating duplicates.
+    """
     existing = db.query(Customer).filter(Customer.email == payload.email).first()
     if existing:
         raise DuplicateCustomerError(payload.email)
 
-    # Create in Stripe
-    stripe_service = StripeService()
-    stripe_customer = stripe_service.create_customer(
-        email=payload.email,
-        name=payload.name,
-    )
-
     customer = Customer(
         email=payload.email,
         name=payload.name,
-        stripe_customer_id=stripe_customer.id,
+        stripe_customer_id=None,
         currency=payload.currency.lower(),
         country=payload.country,
         phone=payload.phone,
@@ -49,8 +47,18 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)):
         state=payload.state,
         postal_code=payload.postal_code,
     )
-
     db.add(customer)
+    db.commit()
+    db.refresh(customer)
+
+    stripe_customer = StripeService.create_customer(
+        email=payload.email,
+        name=payload.name,
+        metadata={"local_id": str(customer.id)},
+        idempotency_key=str(customer.id),
+    )
+
+    customer.stripe_customer_id = stripe_customer.id
     db.commit()
     db.refresh(customer)
     return customer

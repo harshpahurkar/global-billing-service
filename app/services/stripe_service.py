@@ -22,14 +22,18 @@ class StripeService:
     # --- Customers ---
 
     @staticmethod
-    def create_customer(email: str, name: str, metadata: Optional[Dict] = None) -> stripe.Customer:
+    def create_customer(
+        email: str,
+        name: str,
+        metadata: Optional[Dict] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> stripe.Customer:
         """Create a customer in Stripe."""
         try:
-            customer = stripe.Customer.create(
-                email=email,
-                name=name,
-                metadata=metadata or {},
-            )
+            kwargs: Dict[str, Any] = {"email": email, "name": name, "metadata": metadata or {}}
+            if idempotency_key:
+                kwargs["idempotency_key"] = idempotency_key
+            customer = stripe.Customer.create(**kwargs)
             logger.info("stripe_customer_created", customer_id=customer.id, email=email)
             return customer
         except stripe.StripeError as e:
@@ -60,18 +64,29 @@ class StripeService:
     # --- Products & Prices ---
 
     @staticmethod
-    def create_product(name: str, description: Optional[str] = None) -> stripe.Product:
+    def create_product(
+        name: str,
+        description: Optional[str] = None,
+        metadata: Optional[Dict] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> stripe.Product:
         """Create a product in Stripe."""
         try:
-            product = stripe.Product.create(
-                name=name,
-                description=description or "",
-            )
+            kwargs: Dict[str, Any] = {
+                "name": name,
+                "description": description or "",
+                "metadata": metadata or {},
+            }
+            if idempotency_key:
+                kwargs["idempotency_key"] = idempotency_key
+            product = stripe.Product.create(**kwargs)
             logger.info("stripe_product_created", product_id=product.id)
             return product
         except stripe.StripeError as e:
             logger.error("stripe_product_create_failed", error=str(e))
             raise StripeError(detail=str(e))
+
+    _INTERVAL_MAP = {"monthly": "month", "yearly": "year", "weekly": "week"}
 
     @staticmethod
     def create_price(
@@ -80,6 +95,7 @@ class StripeService:
         currency: str,
         interval: Optional[str] = None,
         interval_count: int = 1,
+        idempotency_key: Optional[str] = None,
     ) -> stripe.Price:
         """Create a price in Stripe. Amount should be in cents."""
         try:
@@ -90,12 +106,11 @@ class StripeService:
             }
             if interval and interval != "one_time":
                 price_data["recurring"] = {
-                    "interval": interval if interval != "yearly" else "year",
+                    "interval": StripeService._INTERVAL_MAP.get(interval, interval),
                     "interval_count": interval_count,
                 }
-                # Map our intervals to Stripe's
-                interval_map = {"monthly": "month", "yearly": "year", "weekly": "week"}
-                price_data["recurring"]["interval"] = interval_map.get(interval, interval)
+            if idempotency_key:
+                price_data["idempotency_key"] = idempotency_key
 
             price = stripe.Price.create(**price_data)
             logger.info("stripe_price_created", price_id=price.id, amount=amount)
@@ -111,6 +126,8 @@ class StripeService:
         customer_id: str,
         price_id: str,
         trial_days: int = 0,
+        metadata: Optional[Dict] = None,
+        idempotency_key: Optional[str] = None,
     ) -> stripe.Subscription:
         """Create a subscription in Stripe."""
         try:
@@ -119,9 +136,12 @@ class StripeService:
                 "items": [{"price": price_id}],
                 "payment_behavior": "default_incomplete",
                 "expand": ["latest_invoice.payment_intent"],
+                "metadata": metadata or {},
             }
             if trial_days > 0:
                 sub_data["trial_period_days"] = trial_days
+            if idempotency_key:
+                sub_data["idempotency_key"] = idempotency_key
 
             subscription = stripe.Subscription.create(**sub_data)
             logger.info("stripe_subscription_created", subscription_id=subscription.id)
@@ -197,15 +217,21 @@ class StripeService:
         customer_id: str,
         description: Optional[str] = None,
         currency: str = "usd",
+        metadata: Optional[Dict] = None,
+        idempotency_key: Optional[str] = None,
     ) -> stripe.Invoice:
         """Create an invoice in Stripe."""
         try:
-            invoice = stripe.Invoice.create(
-                customer=customer_id,
-                description=description or "Billing invoice",
-                currency=currency.lower(),
-                auto_advance=True,
-            )
+            kwargs: Dict[str, Any] = {
+                "customer": customer_id,
+                "description": description or "Billing invoice",
+                "currency": currency.lower(),
+                "auto_advance": True,
+                "metadata": metadata or {},
+            }
+            if idempotency_key:
+                kwargs["idempotency_key"] = idempotency_key
+            invoice = stripe.Invoice.create(**kwargs)
             logger.info("stripe_invoice_created", invoice_id=invoice.id)
             return invoice
         except stripe.StripeError as e:
@@ -243,17 +269,21 @@ class StripeService:
         customer_id: str,
         description: Optional[str] = None,
         metadata: Optional[Dict] = None,
+        idempotency_key: Optional[str] = None,
     ) -> stripe.PaymentIntent:
         """Create a payment intent in Stripe. Amount in cents."""
         try:
-            intent = stripe.PaymentIntent.create(
-                amount=amount,
-                currency=currency.lower(),
-                customer=customer_id,
-                description=description,
-                metadata=metadata or {},
-                automatic_payment_methods={"enabled": True},
-            )
+            kwargs: Dict[str, Any] = {
+                "amount": amount,
+                "currency": currency.lower(),
+                "customer": customer_id,
+                "description": description,
+                "metadata": metadata or {},
+                "automatic_payment_methods": {"enabled": True},
+            }
+            if idempotency_key:
+                kwargs["idempotency_key"] = idempotency_key
+            intent = stripe.PaymentIntent.create(**kwargs)
             logger.info("stripe_payment_intent_created", intent_id=intent.id, amount=amount)
             return intent
         except stripe.StripeError as e:

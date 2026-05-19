@@ -28,38 +28,44 @@ def create_payment(
     payload: PaymentCreate,
     db: Session = Depends(get_db),
 ):
-    """Create a payment (charge) for a customer."""
+    """Create a payment intent for a customer.
+
+    Local payment row is written first as PENDING with no Stripe ID, then
+    Stripe is called with `idempotency_key=<local_id>`. Failure leaves the
+    local row in PENDING with stripe_payment_intent_id NULL for reconciliation.
+    """
     customer = db.query(Customer).filter(Customer.id == payload.customer_id).first()
     if not customer:
         raise CustomerNotFoundError(str(payload.customer_id))
 
-    # Create payment intent in Stripe
-    stripe_service = StripeService()
-    amount_cents = int(payload.amount * 100)
-    stripe_intent = None
-
-    if customer.stripe_customer_id:
-        stripe_intent = stripe_service.create_payment_intent(
-            amount=amount_cents,
-            currency=payload.currency,
-            customer_id=customer.stripe_customer_id,
-            description=payload.description,
-        )
-
     payment = Payment(
         customer_id=payload.customer_id,
         invoice_id=payload.invoice_id,
-        stripe_payment_intent_id=stripe_intent.id if stripe_intent else None,
+        stripe_payment_intent_id=None,
         amount=payload.amount,
         currency=payload.currency.lower(),
         status=PaymentStatus.PENDING,
         payment_method=payload.payment_method,
         description=payload.description,
     )
-
     db.add(payment)
     db.commit()
     db.refresh(payment)
+
+    if customer.stripe_customer_id:
+        amount_cents = int(payload.amount * 100)
+        stripe_intent = StripeService.create_payment_intent(
+            amount=amount_cents,
+            currency=payload.currency,
+            customer_id=customer.stripe_customer_id,
+            description=payload.description,
+            metadata={"local_id": str(payment.id)},
+            idempotency_key=str(payment.id),
+        )
+        payment.stripe_payment_intent_id = stripe_intent.id
+        db.commit()
+        db.refresh(payment)
+
     return payment
 
 

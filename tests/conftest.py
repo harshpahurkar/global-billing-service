@@ -79,7 +79,14 @@ def unauthenticated_client(db_session):
 @pytest.fixture
 def mock_stripe():
     """Mock all Stripe API calls."""
+    import stripe as real_stripe
+
     with patch("app.services.stripe_service.stripe") as mock:
+        # Preserve the real exception classes so `except stripe.StripeError`
+        # in service code resolves to a real BaseException subclass.
+        mock.StripeError = real_stripe.StripeError
+        mock.SignatureVerificationError = real_stripe.SignatureVerificationError
+
         # Counters for unique IDs
         _cus_counter = itertools.count(1)
         _prod_counter = itertools.count(1)

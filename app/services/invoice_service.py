@@ -42,7 +42,12 @@ class InvoiceService:
         line_items: Optional[str] = None,
         due_date: Optional[datetime] = None,
     ) -> Invoice:
-        """Create a new invoice."""
+        """Create a new invoice.
+
+        Local row is written first; Stripe is called second with an idempotency
+        key derived from the local UUID. A failed Stripe call leaves the local
+        invoice with stripe_invoice_id NULL for reconciliation.
+        """
         customer = self.db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
             raise CustomerNotFoundError(str(customer_id))
@@ -51,20 +56,10 @@ class InvoiceService:
         if due_date is None:
             due_date = datetime.now(timezone.utc) + timedelta(days=30)
 
-        # Create in Stripe if customer has Stripe ID
-        stripe_invoice_id = None
-        if customer.stripe_customer_id:
-            stripe_invoice = self.stripe.create_invoice(
-                customer_id=customer.stripe_customer_id,
-                description=description,
-                currency=currency,
-            )
-            stripe_invoice_id = stripe_invoice.id
-
         invoice = Invoice(
             customer_id=customer_id,
             subscription_id=subscription_id,
-            stripe_invoice_id=stripe_invoice_id,
+            stripe_invoice_id=None,
             invoice_number=_generate_invoice_number(),
             status=InvoiceStatus.OPEN,
             currency=currency,
@@ -77,10 +72,21 @@ class InvoiceService:
             line_items=line_items,
             description=description,
         )
-
         self.db.add(invoice)
         self.db.commit()
         self.db.refresh(invoice)
+
+        if customer.stripe_customer_id:
+            stripe_invoice = self.stripe.create_invoice(
+                customer_id=customer.stripe_customer_id,
+                description=description,
+                currency=currency,
+                metadata={"local_id": str(invoice.id)},
+                idempotency_key=str(invoice.id),
+            )
+            invoice.stripe_invoice_id = stripe_invoice.id
+            self.db.commit()
+            self.db.refresh(invoice)
 
         logger.info(
             "invoice_created",

@@ -1,48 +1,48 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class CustomerCreate(BaseModel):
     email: EmailStr
     name: str = Field(..., min_length=1, max_length=255)
     currency: str = Field(default="usd", min_length=3, max_length=3)
-    country: Optional[str] = Field(None, min_length=2, max_length=2)
-    phone: Optional[str] = Field(None, max_length=50)
-    address_line1: Optional[str] = Field(None, max_length=255)
-    address_line2: Optional[str] = Field(None, max_length=255)
-    city: Optional[str] = Field(None, max_length=100)
-    state: Optional[str] = Field(None, max_length=100)
-    postal_code: Optional[str] = Field(None, max_length=20)
+    country: str | None = Field(None, min_length=2, max_length=2)
+    phone: str | None = Field(None, max_length=50)
+    address_line1: str | None = Field(None, max_length=255)
+    address_line2: str | None = Field(None, max_length=255)
+    city: str | None = Field(None, max_length=100)
+    state: str | None = Field(None, max_length=100)
+    postal_code: str | None = Field(None, max_length=20)
 
 
 class CustomerUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    currency: Optional[str] = Field(None, min_length=3, max_length=3)
-    country: Optional[str] = Field(None, min_length=2, max_length=2)
-    phone: Optional[str] = Field(None, max_length=50)
-    address_line1: Optional[str] = Field(None, max_length=255)
-    address_line2: Optional[str] = Field(None, max_length=255)
-    city: Optional[str] = Field(None, max_length=100)
-    state: Optional[str] = Field(None, max_length=100)
-    postal_code: Optional[str] = Field(None, max_length=20)
-    is_active: Optional[bool] = None
+    name: str | None = Field(None, min_length=1, max_length=255)
+    currency: str | None = Field(None, min_length=3, max_length=3)
+    country: str | None = Field(None, min_length=2, max_length=2)
+    phone: str | None = Field(None, max_length=50)
+    address_line1: str | None = Field(None, max_length=255)
+    address_line2: str | None = Field(None, max_length=255)
+    city: str | None = Field(None, max_length=100)
+    state: str | None = Field(None, max_length=100)
+    postal_code: str | None = Field(None, max_length=20)
+    is_active: bool | None = None
 
 
 class CustomerResponse(BaseModel):
     id: UUID
     email: str
     name: str
-    stripe_customer_id: Optional[str] = None
+    stripe_customer_id: str | None = None
     currency: str
-    country: Optional[str] = None
-    phone: Optional[str] = None
-    address_line1: Optional[str] = None
-    address_line2: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    postal_code: Optional[str] = None
+    country: str | None = None
+    phone: str | None = None
+    address_line1: str | None = None
+    address_line2: str | None = None
+    city: str | None = None
+    state: str | None = None
+    postal_code: str | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -51,7 +51,7 @@ class CustomerResponse(BaseModel):
 
 
 class CustomerListResponse(BaseModel):
-    customers: List[CustomerResponse]
+    customers: list[CustomerResponse]
     total: int
     page: int
     per_page: int

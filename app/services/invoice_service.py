@@ -1,19 +1,18 @@
 """Invoice management service."""
 
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
-from uuid import UUID
 import secrets
 import string
-import structlog
+from datetime import UTC, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
+from uuid import UUID
 
+import structlog
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import BillingException, InvoiceNotFoundError, CustomerNotFoundError
-from app.models.invoice import Invoice, InvoiceStatus
+from app.core.exceptions import BillingException, CustomerNotFoundError, InvoiceNotFoundError
 from app.models.customer import Customer
+from app.models.invoice import Invoice, InvoiceStatus
 from app.services.stripe_service import StripeService
 
 logger = structlog.get_logger()
@@ -28,7 +27,7 @@ def _generate_invoice_number() -> str:
     uses the OS CSPRNG. The 6-char suffix gives ~2.2B values per day so the
     `invoice_number UNIQUE` constraint is the safety net, not the assumption.
     """
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d")
     random_suffix = "".join(secrets.choice(_INVOICE_NUMBER_ALPHABET) for _ in range(6))
     return f"INV-{timestamp}-{random_suffix}"
 
@@ -51,10 +50,10 @@ class InvoiceService:
         subtotal: float,
         currency: str = "usd",
         tax: float = 0,
-        subscription_id: Optional[UUID] = None,
-        description: Optional[str] = None,
-        line_items: Optional[str] = None,
-        due_date: Optional[datetime] = None,
+        subscription_id: UUID | None = None,
+        description: str | None = None,
+        line_items: str | None = None,
+        due_date: datetime | None = None,
     ) -> Invoice:
         """Create a new invoice.
 
@@ -74,7 +73,7 @@ class InvoiceService:
         total_d = subtotal_d + tax_d
 
         if due_date is None:
-            due_date = datetime.now(timezone.utc) + timedelta(days=30)
+            due_date = datetime.now(UTC) + timedelta(days=30)
 
         # Retry once on invoice_number collision; with 6 random chars + daily
         # prefix collisions are vanishingly rare but the UNIQUE constraint is
@@ -146,7 +145,7 @@ class InvoiceService:
         if invoice.stripe_invoice_id:
             self.stripe.pay_invoice(invoice.stripe_invoice_id)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         invoice.status = InvoiceStatus.PAID
         invoice.amount_paid = invoice.total
         invoice.amount_due = Decimal("0")
@@ -181,8 +180,8 @@ class InvoiceService:
 
     def list_invoices(
         self,
-        customer_id: Optional[UUID] = None,
-        status: Optional[InvoiceStatus] = None,
+        customer_id: UUID | None = None,
+        status: InvoiceStatus | None = None,
         page: int = 1,
         per_page: int = 20,
     ):

@@ -5,10 +5,9 @@ reconciliation job can retry without creating duplicates, and that the
 idempotency_key passed to Stripe matches the local row UUID.
 """
 
-import stripe
 from uuid import uuid4
 
-from app.core.exceptions import StripeError
+import stripe
 
 
 class TestLocalFirstOrdering:

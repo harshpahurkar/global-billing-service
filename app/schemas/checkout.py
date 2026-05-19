@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from uuid import UUID
+
+from pydantic import BaseModel, Field
 
 
 class CheckoutSessionCreate(BaseModel):
@@ -8,7 +8,7 @@ class CheckoutSessionCreate(BaseModel):
     plan_id: UUID
     success_url: str = Field(..., max_length=500)
     cancel_url: str = Field(..., max_length=500)
-    currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    currency: str | None = Field(None, min_length=3, max_length=3)
 
 
 class CheckoutSessionResponse(BaseModel):
@@ -28,5 +28,5 @@ class CurrencyResponse(BaseModel):
 
 
 class CurrencyListResponse(BaseModel):
-    currencies: List[CurrencyResponse]
+    currencies: list[CurrencyResponse]
     total: int

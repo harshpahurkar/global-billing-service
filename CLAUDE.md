@@ -14,7 +14,7 @@ The `Makefile` is the canonical entry point. Use `make help` to list targets.
 - `make test` — full pytest run (`pytest -v --tb=short`)
 - `make test-cov` — pytest with coverage report
 - `pytest tests/test_subscriptions.py::test_name -v` — run a single test
-- `make lint` — flake8 (`--max-line-length=120`); CI runs the same command and fails the build on violations
+- `make lint` — `ruff check app/ tests/` (rules + line-length live in `pyproject.toml`); CI runs the same command and fails the build on violations
 - `make migrate` — `alembic upgrade head`
 - `make migrate-create msg="..."` — autogenerate a new Alembic revision
 - `make seed` — `python -m app.scripts.seed_data` (loads 6 plans + 5 customers)
@@ -37,15 +37,21 @@ Three-layer FastAPI app: **endpoints → services → models/db**. Keep new code
 - `app/main.py` — `create_app()` factory. Registers CORS, request-logging middleware, the `BillingException` handler (translates custom exceptions into structured `{"error": {...}}` JSON responses), and mounts `api_router` under `/api/v1`. `/health` lives at the root.
 - `app/api/v1/router.py` — aggregates 8 endpoint modules: `customers`, `plans`, `subscriptions`, `invoices`, `payments`, `checkout`, `webhooks`, `currencies`.
 - `app/services/` — business logic. `StripeService` is the Stripe abstraction; `SubscriptionService`, `InvoiceService`, `CurrencyService` orchestrate domain operations. Services take a `Session` in `__init__` and instantiate `StripeService()` internally.
-- `app/models/` — SQLAlchemy 2.0 models on the shared `Base` from `app/db/base.py`. Use the `UUIDMixin` + `TimestampMixin` mixins for new tables. Primary keys use a custom `GUID` `TypeDecorator` that stores as `CHAR(36)` and works on both PostgreSQL and SQLite (the test backend) — do not switch to `postgresql.UUID` directly without preserving SQLite compatibility, or the tests will break.
+- `app/models/` — SQLAlchemy 2.0 models on the shared `Base` from `app/db/base.py`. Use the `UUIDMixin` + `TimestampMixin` mixins for new tables. Primary keys use a custom `GUID` `TypeDecorator` that dispatches per-dialect — `postgresql.UUID(as_uuid=True)` on PG (matches the migration) and `String(36)` on SQLite — so Python-side values are always `uuid.UUID` and the underlying column type is native.
 - `app/schemas/` — Pydantic v2 request/response models, one module per domain.
 - `app/core/config.py` — `Settings` is a `pydantic_settings.BaseSettings` cached via `lru_cache`. `CORS_ORIGINS` is a JSON string parsed by the `cors_origins_list` property.
-- `app/core/exceptions.py` — custom `BillingException` hierarchy. Raise these from services; the global handler in `main.py` formats them. Don't raise raw `HTTPException` from services.
+- `app/core/exceptions.py` — custom `BillingException` hierarchy. Raise these from services; `main.py` registers four exception handlers (`BillingException`, generic `HTTPException`, `RequestValidationError`, fallthrough `Exception`) so every error response has the same `{"error": {"message", "status_code", ...}}` envelope.
 - `alembic/versions/` — schema migrations. Always create a migration when changing models; don't rely on `create_all`.
 
 ## Stripe & webhooks
 
-Stripe is the system of record for payment state. Local DB rows mirror Stripe objects (customer/product/price/subscription/invoice IDs are stored on the corresponding models). Webhook events arrive at `POST /api/v1/webhooks/stripe` and are verified with `STRIPE_WEBHOOK_SECRET` before being applied to local state. When adding flows that mutate billing state, ensure both the Stripe call and the local DB write happen in `StripeService` / a domain service — don't split them across layers.
+Stripe is the system of record for payment state. Local DB rows mirror Stripe objects (customer/product/price/subscription/invoice IDs are stored on the corresponding models).
+
+**Create-flow ordering (load-bearing):** write the local row first with `stripe_id=NULL`, commit, *then* call Stripe with `idempotency_key=<local_uuid>` and `metadata={"local_id": ...}`, then backfill the returned ID and commit again. A Stripe failure leaves the local row behind for a reconciliation job; retries are safe because of the idempotency key.
+
+**Webhooks** arrive at `POST /api/v1/webhooks/stripe` and are verified with `STRIPE_WEBHOOK_SECRET`. The handler upserts the event id into `processed_stripe_events` before mutating any other state and short-circuits on duplicates. State-transition guards forbid moves out of terminal states (e.g. a stale `invoice.payment_failed` cannot reopen a PAID invoice).
+
+**Money:** services use `decimal.Decimal` end-to-end. Convert at the schema boundary, never round-trip through float; `Numeric(10,2)` columns return Decimal natively.
 
 ## Multi-currency
 

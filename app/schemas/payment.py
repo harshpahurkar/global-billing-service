@@ -1,38 +1,39 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
-from uuid import UUID
 from datetime import datetime
-from app.models.payment import PaymentStatus, PaymentMethod
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+from app.models.payment import PaymentMethod, PaymentStatus
 
 
 class PaymentCreate(BaseModel):
     customer_id: UUID
-    invoice_id: Optional[UUID] = None
+    invoice_id: UUID | None = None
     amount: float = Field(..., gt=0)
     currency: str = Field(default="usd", min_length=3, max_length=3)
     payment_method: PaymentMethod = PaymentMethod.CARD
-    description: Optional[str] = Field(None, max_length=500)
+    description: str | None = Field(None, max_length=500)
 
 
 class PaymentRefund(BaseModel):
-    amount: Optional[float] = Field(None, gt=0)  # None = full refund
-    reason: Optional[str] = Field(None, max_length=500)
+    amount: float | None = Field(None, gt=0)  # None = full refund
+    reason: str | None = Field(None, max_length=500)
 
 
 class PaymentResponse(BaseModel):
     id: UUID
     customer_id: UUID
-    invoice_id: Optional[UUID] = None
-    stripe_payment_intent_id: Optional[str] = None
-    stripe_charge_id: Optional[str] = None
+    invoice_id: UUID | None = None
+    stripe_payment_intent_id: str | None = None
+    stripe_charge_id: str | None = None
     amount: float
     currency: str
     status: PaymentStatus
-    payment_method: Optional[PaymentMethod] = None
+    payment_method: PaymentMethod | None = None
     refunded_amount: float
-    failure_reason: Optional[str] = None
-    paid_at: Optional[datetime] = None
-    description: Optional[str] = None
+    failure_reason: str | None = None
+    paid_at: datetime | None = None
+    description: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -40,7 +41,7 @@ class PaymentResponse(BaseModel):
 
 
 class PaymentListResponse(BaseModel):
-    payments: List[PaymentResponse]
+    payments: list[PaymentResponse]
     total: int
     page: int
     per_page: int

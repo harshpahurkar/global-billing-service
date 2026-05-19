@@ -1,10 +1,9 @@
 """Supported currencies with metadata for multi-currency billing."""
 
-from typing import Dict, List, Optional
+
 from app.schemas.checkout import CurrencyResponse
 
-
-SUPPORTED_CURRENCIES: Dict[str, dict] = {
+SUPPORTED_CURRENCIES: dict[str, dict] = {
     "usd": {"name": "US Dollar", "symbol": "$", "min_charge": 0.50},
     "eur": {"name": "Euro", "symbol": "€", "min_charge": 0.50},
     "gbp": {"name": "British Pound", "symbol": "£", "min_charge": 0.30},
@@ -47,7 +46,7 @@ SUPPORTED_CURRENCIES: Dict[str, dict] = {
 }
 
 
-def get_supported_currencies() -> List[CurrencyResponse]:
+def get_supported_currencies() -> list[CurrencyResponse]:
     """Return a list of all supported currencies."""
     return [
         CurrencyResponse(
@@ -65,7 +64,7 @@ def is_currency_supported(currency: str) -> bool:
     return currency.lower() in SUPPORTED_CURRENCIES
 
 
-def get_currency_info(currency: str) -> Optional[dict]:
+def get_currency_info(currency: str) -> dict | None:
     """Get metadata for a specific currency."""
     return SUPPORTED_CURRENCIES.get(currency.lower())
 

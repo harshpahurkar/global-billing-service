@@ -1,22 +1,21 @@
 """Subscription lifecycle management service."""
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
-import structlog
 
+import structlog
 from sqlalchemy.orm import Session
 
-from app.models.subscription import Subscription, SubscriptionStatus
-from app.models.customer import Customer
-from app.models.plan import Plan, PlanInterval
 from app.core.exceptions import (
-    SubscriptionNotFoundError,
-    SubscriptionNotActiveError,
-    SubscriptionAlreadyCancelledError,
     CustomerNotFoundError,
     PlanNotFoundError,
+    SubscriptionAlreadyCancelledError,
+    SubscriptionNotActiveError,
+    SubscriptionNotFoundError,
 )
+from app.models.customer import Customer
+from app.models.plan import Plan, PlanInterval
+from app.models.subscription import Subscription, SubscriptionStatus
 from app.services.stripe_service import StripeService
 
 logger = structlog.get_logger()
@@ -37,11 +36,11 @@ def _period_end_fallback(plan: Plan, start: datetime) -> datetime:
     return start + timedelta(days=days)
 
 
-def _stripe_ts_to_datetime(ts) -> Optional[datetime]:
+def _stripe_ts_to_datetime(ts) -> datetime | None:
     """Convert a Stripe Unix timestamp (or MagicMock in tests) to a UTC datetime."""
-    if not isinstance(ts, (int, float)) or ts <= 0:
+    if not isinstance(ts, int | float) or ts <= 0:
         return None
-    return datetime.fromtimestamp(ts, tz=timezone.utc)
+    return datetime.fromtimestamp(ts, tz=UTC)
 
 
 class SubscriptionService:
@@ -75,7 +74,7 @@ class SubscriptionService:
         if not plan:
             raise PlanNotFoundError(str(plan_id))
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         status = SubscriptionStatus.ACTIVE
         trial_start = None
         trial_end = None
@@ -237,7 +236,7 @@ class SubscriptionService:
             # handler (or a direct at_period_end=False cancel) flips them.
         else:
             subscription.status = SubscriptionStatus.CANCELED
-            subscription.canceled_at = datetime.now(timezone.utc)
+            subscription.canceled_at = datetime.now(UTC)
 
         self.db.commit()
         self.db.refresh(subscription)
@@ -272,8 +271,8 @@ class SubscriptionService:
 
     def list_subscriptions(
         self,
-        customer_id: Optional[UUID] = None,
-        status: Optional[SubscriptionStatus] = None,
+        customer_id: UUID | None = None,
+        status: SubscriptionStatus | None = None,
         page: int = 1,
         per_page: int = 20,
     ):

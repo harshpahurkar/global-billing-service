@@ -1,6 +1,5 @@
 """Tests for invoice and payment endpoints."""
 
-import pytest
 from uuid import uuid4
 
 
@@ -135,6 +134,7 @@ class TestRefundDecimalArithmetic:
 
     def test_partial_refunds_sum_exactly_in_decimal(self, client, mock_stripe, db_session):
         from decimal import Decimal
+
         from app.models.payment import Payment, PaymentStatus
 
         customer_id = self._create_customer(client)

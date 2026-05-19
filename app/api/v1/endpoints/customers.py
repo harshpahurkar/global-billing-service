@@ -1,17 +1,18 @@
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
 from uuid import UUID
 
-from app.db.session import get_db
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from app.core.exceptions import CustomerNotFoundError, DuplicateCustomerError
 from app.core.security import require_api_key
+from app.db.session import get_db
 from app.models.customer import Customer
 from app.schemas.customer import (
     CustomerCreate,
-    CustomerUpdate,
-    CustomerResponse,
     CustomerListResponse,
+    CustomerResponse,
+    CustomerUpdate,
 )
-from app.core.exceptions import CustomerNotFoundError, DuplicateCustomerError
 from app.services.stripe_service import StripeService
 
 router = APIRouter(

@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Request, Depends
+from datetime import UTC
+
+import structlog
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-import structlog
 
 from app.db.session import get_db
-from app.services.stripe_service import StripeService
-from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.payment import Payment, PaymentStatus
 from app.models.stripe_event import ProcessedStripeEvent
+from app.models.subscription import Subscription, SubscriptionStatus
+from app.services.stripe_service import StripeService
 
 logger = structlog.get_logger()
 
@@ -115,7 +117,7 @@ def _handle_subscription_updated(db: Session, data: dict):
 
 
 def _handle_subscription_deleted(db: Session, data: dict):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     stripe_sub_id = data.get("id")
     subscription = db.query(Subscription).filter(
@@ -124,7 +126,7 @@ def _handle_subscription_deleted(db: Session, data: dict):
     if subscription:
         subscription.status = SubscriptionStatus.CANCELED
         if subscription.canceled_at is None:
-            subscription.canceled_at = datetime.now(timezone.utc)
+            subscription.canceled_at = datetime.now(UTC)
         db.commit()
         logger.info("webhook_subscription_deleted", subscription_id=str(subscription.id))
 

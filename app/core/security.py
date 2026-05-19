@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import Depends, Header, status
 from sqlalchemy.orm import Session
@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import BillingException
 from app.db.session import get_db
 from app.models.api_key import APIKey
-
 
 API_KEY_PREFIX = "gbs_"
 _RAW_KEY_BYTES = 32  # 32 bytes -> 43-char base64url body
@@ -54,6 +53,6 @@ def require_api_key(
     if api_key is None or not api_key.is_active:
         raise AuthenticationError()
 
-    api_key.last_used_at = datetime.now(timezone.utc)
+    api_key.last_used_at = datetime.now(UTC)
     db.commit()
     return api_key

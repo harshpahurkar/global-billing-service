@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 
 from app.core.security import require_api_key
-from app.services.currency_service import get_supported_currencies
 from app.schemas.checkout import CurrencyListResponse
+from app.services.currency_service import get_supported_currencies
 
 router = APIRouter(
     prefix="/currencies",

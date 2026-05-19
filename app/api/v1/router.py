@@ -1,14 +1,14 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    checkout,
+    currencies,
     customers,
-    plans,
-    subscriptions,
     invoices,
     payments,
-    checkout,
+    plans,
+    subscriptions,
     webhooks,
-    currencies,
 )
 
 api_router = APIRouter()

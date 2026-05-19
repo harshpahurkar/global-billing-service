@@ -1,17 +1,17 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from uuid import UUID
-from typing import Optional
 
-from app.db.session import get_db
 from app.core.security import require_api_key
+from app.db.session import get_db
+from app.models.subscription import SubscriptionStatus
 from app.schemas.subscription import (
     SubscriptionCreate,
-    SubscriptionUpgrade,
-    SubscriptionResponse,
     SubscriptionListResponse,
+    SubscriptionResponse,
+    SubscriptionUpgrade,
 )
-from app.models.subscription import SubscriptionStatus
 from app.services.subscription_service import SubscriptionService
 
 router = APIRouter(
@@ -38,8 +38,8 @@ def create_subscription(
 
 @router.get("", response_model=SubscriptionListResponse)
 def list_subscriptions(
-    customer_id: Optional[UUID] = Query(None),
-    status: Optional[SubscriptionStatus] = Query(None),
+    customer_id: UUID | None = Query(None),
+    status: SubscriptionStatus | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),

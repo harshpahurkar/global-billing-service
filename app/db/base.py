@@ -1,7 +1,8 @@
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import Column, DateTime, String, func, TypeDecorator
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 import uuid
+
+from sqlalchemy import Column, DateTime, String, TypeDecorator, func
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import DeclarativeBase
 
 
 class GUID(TypeDecorator):

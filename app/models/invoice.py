@@ -1,8 +1,10 @@
-from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, Enum as SQLEnum, Text
-from sqlalchemy.orm import relationship
 import enum
 
-from app.db.base import Base, TimestampMixin, UUIDMixin, GUID
+from sqlalchemy import Column, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.orm import relationship
+
+from app.db.base import GUID, Base, TimestampMixin, UUIDMixin
 
 
 class InvoiceStatus(str, enum.Enum):

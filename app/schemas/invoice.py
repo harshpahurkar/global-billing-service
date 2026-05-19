@@ -1,26 +1,27 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
 from app.models.invoice import InvoiceStatus
 
 
 class InvoiceCreate(BaseModel):
     customer_id: UUID
-    subscription_id: Optional[UUID] = None
+    subscription_id: UUID | None = None
     currency: str = Field(default="usd", min_length=3, max_length=3)
     subtotal: float = Field(..., ge=0)
     tax: float = Field(default=0, ge=0)
-    description: Optional[str] = Field(None, max_length=500)
-    line_items: Optional[str] = None
-    due_date: Optional[datetime] = None
+    description: str | None = Field(None, max_length=500)
+    line_items: str | None = None
+    due_date: datetime | None = None
 
 
 class InvoiceResponse(BaseModel):
     id: UUID
     customer_id: UUID
-    subscription_id: Optional[UUID] = None
-    stripe_invoice_id: Optional[str] = None
+    subscription_id: UUID | None = None
+    stripe_invoice_id: str | None = None
     invoice_number: str
     status: InvoiceStatus
     currency: str
@@ -29,10 +30,10 @@ class InvoiceResponse(BaseModel):
     total: float
     amount_paid: float
     amount_due: float
-    due_date: Optional[datetime] = None
-    paid_at: Optional[datetime] = None
-    line_items: Optional[str] = None
-    description: Optional[str] = None
+    due_date: datetime | None = None
+    paid_at: datetime | None = None
+    line_items: str | None = None
+    description: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -40,7 +41,7 @@ class InvoiceResponse(BaseModel):
 
 
 class InvoiceListResponse(BaseModel):
-    invoices: List[InvoiceResponse]
+    invoices: list[InvoiceResponse]
     total: int
     page: int
     per_page: int

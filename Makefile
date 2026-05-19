@@ -16,7 +16,7 @@ test-cov: ## Run tests with coverage
 	pytest --cov=app --cov-report=html --cov-report=term -v
 
 lint: ## Run linting
-	flake8 app/ --max-line-length=120 --exclude=__pycache__
+	ruff check app/ tests/
 
 run: ## Start production server
 	uvicorn app.main:app --host 0.0.0.0 --port 8000

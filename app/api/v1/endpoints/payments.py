@@ -1,21 +1,20 @@
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from uuid import UUID
-from typing import Optional
 
-from app.db.session import get_db
+from app.core.exceptions import BillingException, CustomerNotFoundError, PaymentNotFoundError
 from app.core.security import require_api_key
-from app.models.payment import Payment, PaymentStatus
+from app.db.session import get_db
 from app.models.customer import Customer
+from app.models.payment import Payment, PaymentStatus
 from app.schemas.payment import (
     PaymentCreate,
+    PaymentListResponse,
     PaymentRefund,
     PaymentResponse,
-    PaymentListResponse,
 )
-from app.core.exceptions import PaymentNotFoundError, CustomerNotFoundError, BillingException
 from app.services.stripe_service import StripeService
 
 router = APIRouter(
@@ -73,8 +72,8 @@ def create_payment(
 
 @router.get("", response_model=PaymentListResponse)
 def list_payments(
-    customer_id: Optional[UUID] = Query(None),
-    status: Optional[PaymentStatus] = Query(None),
+    customer_id: UUID | None = Query(None),
+    status: PaymentStatus | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),

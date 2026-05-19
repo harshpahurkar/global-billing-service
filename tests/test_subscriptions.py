@@ -1,7 +1,7 @@
 """Tests for subscription lifecycle."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from datetime import UTC
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 
@@ -207,9 +207,9 @@ class TestSubscriptionSemantics:
     def test_period_end_from_stripe_response(self, client, mock_stripe, db_session):
         """When Stripe returns a current_period_end timestamp, we honor it
         instead of using the local 30-day fallback."""
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from app.models.subscription import Subscription
-        from unittest.mock import MagicMock
 
         # Configure the subscription create mock to return a specific period_end
         ts_end = 1893456000  # 2030-01-01 UTC
@@ -235,8 +235,8 @@ class TestSubscriptionSemantics:
         # SQLite drops tzinfo on DateTime(timezone=True) roundtrip; the
         # stored timestamp is still UTC. Compare the wall-clock value, not
         # the tz-aware/naive flavor.
-        expected_end = datetime.fromtimestamp(ts_end, tz=timezone.utc).replace(tzinfo=None)
-        expected_start = datetime.fromtimestamp(ts_start, tz=timezone.utc).replace(tzinfo=None)
+        expected_end = datetime.fromtimestamp(ts_end, tz=UTC).replace(tzinfo=None)
+        expected_start = datetime.fromtimestamp(ts_start, tz=UTC).replace(tzinfo=None)
         actual_end = row.current_period_end.replace(tzinfo=None) if row.current_period_end.tzinfo else row.current_period_end
         actual_start = row.current_period_start.replace(tzinfo=None) if row.current_period_start.tzinfo else row.current_period_start
         assert actual_end == expected_end

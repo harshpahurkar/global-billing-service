@@ -1,20 +1,53 @@
-from fastapi import FastAPI, Request
+import logging
+import time
+
+import structlog
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
-import structlog
-import time
 
+from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import BillingException
-from app.api.v1.router import api_router
 
 settings = get_settings()
 
+
+def _configure_logging() -> None:
+    """Configure structlog: JSON in production for CloudWatch parsing,
+    human-readable console output in dev/test."""
+    processors = [
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
+    if settings.is_production:
+        processors.append(structlog.processors.JSONRenderer())
+    else:
+        processors.append(structlog.dev.ConsoleRenderer())
+
+    log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.make_filtering_bound_logger(log_level),
+        cache_logger_on_first_use=True,
+    )
+
+
+_configure_logging()
 logger = structlog.get_logger()
+
+
+def _error_response(status_code: int, message: str, **extra) -> JSONResponse:
+    body = {"error": {"message": message, "status_code": status_code, **extra}}
+    return JSONResponse(status_code=status_code, content=body)
 
 
 def _rate_limit_key(request: Request) -> str:
@@ -75,17 +108,27 @@ def create_app() -> FastAPI:
         )
         return response
 
+    # Unified error envelope. BillingException is most-specific (a subclass of
+    # HTTPException) and is matched first; raw HTTPException covers FastAPI's
+    # own 401/404/405/etc.; RequestValidationError covers Pydantic 422s; a
+    # generic handler catches anything else with a 500 envelope (and logs it).
+
     @application.exception_handler(BillingException)
     async def billing_exception_handler(request: Request, exc: BillingException):
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "error": {
-                    "message": exc.detail,
-                    "status_code": exc.status_code,
-                }
-            },
-        )
+        return _error_response(exc.status_code, exc.detail)
+
+    @application.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        return _error_response(exc.status_code, str(exc.detail))
+
+    @application.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        return _error_response(422, "Validation failed", details=exc.errors())
+
+    @application.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        logger.exception("unhandled_exception", path=request.url.path)
+        return _error_response(500, "Internal server error")
 
     application.include_router(api_router, prefix="/api/v1")
 

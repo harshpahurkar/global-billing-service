@@ -5,20 +5,20 @@ import os
 # captures APP_ENV=development.
 os.environ.setdefault("APP_ENV", "testing")
 
-import pytest
 import itertools
 from unittest.mock import MagicMock, patch
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
-from fastapi.testclient import TestClient
 
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.core.security import generate_api_key, hash_api_key
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.core.security import generate_api_key, hash_api_key
 from app.models.api_key import APIKey
-
 
 # In-memory SQLite, shared across connections via StaticPool so the API
 # request handler and the test fixture see the same data.

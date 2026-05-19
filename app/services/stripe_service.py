@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import stripe
 import structlog
-from typing import Optional, Dict, Any
 
 from app.core.config import get_settings
 from app.core.exceptions import StripeError
@@ -25,12 +26,12 @@ class StripeService:
     def create_customer(
         email: str,
         name: str,
-        metadata: Optional[Dict] = None,
-        idempotency_key: Optional[str] = None,
+        metadata: dict | None = None,
+        idempotency_key: str | None = None,
     ) -> stripe.Customer:
         """Create a customer in Stripe."""
         try:
-            kwargs: Dict[str, Any] = {"email": email, "name": name, "metadata": metadata or {}}
+            kwargs: dict[str, Any] = {"email": email, "name": name, "metadata": metadata or {}}
             if idempotency_key:
                 kwargs["idempotency_key"] = idempotency_key
             customer = stripe.Customer.create(**kwargs)
@@ -66,13 +67,13 @@ class StripeService:
     @staticmethod
     def create_product(
         name: str,
-        description: Optional[str] = None,
-        metadata: Optional[Dict] = None,
-        idempotency_key: Optional[str] = None,
+        description: str | None = None,
+        metadata: dict | None = None,
+        idempotency_key: str | None = None,
     ) -> stripe.Product:
         """Create a product in Stripe."""
         try:
-            kwargs: Dict[str, Any] = {
+            kwargs: dict[str, Any] = {
                 "name": name,
                 "description": description or "",
                 "metadata": metadata or {},
@@ -93,13 +94,13 @@ class StripeService:
         product_id: str,
         amount: int,
         currency: str,
-        interval: Optional[str] = None,
+        interval: str | None = None,
         interval_count: int = 1,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> stripe.Price:
         """Create a price in Stripe. Amount should be in cents."""
         try:
-            price_data: Dict[str, Any] = {
+            price_data: dict[str, Any] = {
                 "product": product_id,
                 "unit_amount": amount,
                 "currency": currency.lower(),
@@ -126,12 +127,12 @@ class StripeService:
         customer_id: str,
         price_id: str,
         trial_days: int = 0,
-        metadata: Optional[Dict] = None,
-        idempotency_key: Optional[str] = None,
+        metadata: dict | None = None,
+        idempotency_key: str | None = None,
     ) -> stripe.Subscription:
         """Create a subscription in Stripe."""
         try:
-            sub_data: Dict[str, Any] = {
+            sub_data: dict[str, Any] = {
                 "customer": customer_id,
                 "items": [{"price": price_id}],
                 "payment_behavior": "default_incomplete",
@@ -227,14 +228,14 @@ class StripeService:
     @staticmethod
     def create_invoice(
         customer_id: str,
-        description: Optional[str] = None,
+        description: str | None = None,
         currency: str = "usd",
-        metadata: Optional[Dict] = None,
-        idempotency_key: Optional[str] = None,
+        metadata: dict | None = None,
+        idempotency_key: str | None = None,
     ) -> stripe.Invoice:
         """Create an invoice in Stripe."""
         try:
-            kwargs: Dict[str, Any] = {
+            kwargs: dict[str, Any] = {
                 "customer": customer_id,
                 "description": description or "Billing invoice",
                 "currency": currency.lower(),
@@ -279,13 +280,13 @@ class StripeService:
         amount: int,
         currency: str,
         customer_id: str,
-        description: Optional[str] = None,
-        metadata: Optional[Dict] = None,
-        idempotency_key: Optional[str] = None,
+        description: str | None = None,
+        metadata: dict | None = None,
+        idempotency_key: str | None = None,
     ) -> stripe.PaymentIntent:
         """Create a payment intent in Stripe. Amount in cents."""
         try:
-            kwargs: Dict[str, Any] = {
+            kwargs: dict[str, Any] = {
                 "amount": amount,
                 "currency": currency.lower(),
                 "customer": customer_id,
@@ -308,9 +309,9 @@ class StripeService:
     @staticmethod
     def create_refund(
         payment_intent_id: str,
-        amount: Optional[int] = None,
-        reason: Optional[str] = None,
-        idempotency_key: Optional[str] = None,
+        amount: int | None = None,
+        reason: str | None = None,
+        idempotency_key: str | None = None,
     ) -> stripe.Refund:
         """Create a refund in Stripe. Amount in cents. None = full refund.
 
@@ -319,7 +320,7 @@ class StripeService:
         being silently dropped.
         """
         try:
-            refund_data: Dict[str, Any] = {"payment_intent": payment_intent_id}
+            refund_data: dict[str, Any] = {"payment_intent": payment_intent_id}
             if amount is not None:
                 refund_data["amount"] = amount
             if reason:

@@ -4,6 +4,7 @@ from uuid import UUID
 from typing import Optional
 
 from app.db.session import get_db
+from app.core.security import require_api_key
 from app.models.payment import Payment, PaymentStatus
 from app.models.customer import Customer
 from app.schemas.payment import (
@@ -15,7 +16,11 @@ from app.schemas.payment import (
 from app.core.exceptions import PaymentNotFoundError, CustomerNotFoundError, BillingException
 from app.services.stripe_service import StripeService
 
-router = APIRouter(prefix="/payments", tags=["Payments"])
+router = APIRouter(
+    prefix="/payments",
+    tags=["Payments"],
+    dependencies=[Depends(require_api_key)],
+)
 
 
 @router.post("", response_model=PaymentResponse, status_code=201)

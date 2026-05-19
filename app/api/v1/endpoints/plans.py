@@ -3,12 +3,17 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.db.session import get_db
+from app.core.security import require_api_key
 from app.models.plan import Plan
 from app.schemas.plan import PlanCreate, PlanUpdate, PlanResponse, PlanListResponse
 from app.core.exceptions import PlanNotFoundError
 from app.services.stripe_service import StripeService
 
-router = APIRouter(prefix="/plans", tags=["Plans"])
+router = APIRouter(
+    prefix="/plans",
+    tags=["Plans"],
+    dependencies=[Depends(require_api_key)],
+)
 
 
 @router.post("", response_model=PlanResponse, status_code=201)

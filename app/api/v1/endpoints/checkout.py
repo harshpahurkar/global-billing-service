@@ -2,13 +2,18 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.core.security import require_api_key
 from app.models.customer import Customer
 from app.models.plan import Plan
 from app.schemas.checkout import CheckoutSessionCreate, CheckoutSessionResponse
-from app.core.exceptions import CustomerNotFoundError, PlanNotFoundError
+from app.core.exceptions import CustomerNotFoundError, PlanNotFoundError, BillingException
 from app.services.stripe_service import StripeService
 
-router = APIRouter(prefix="/checkout", tags=["Checkout"])
+router = APIRouter(
+    prefix="/checkout",
+    tags=["Checkout"],
+    dependencies=[Depends(require_api_key)],
+)
 
 
 @router.post("/sessions", response_model=CheckoutSessionResponse, status_code=201)
@@ -26,7 +31,6 @@ def create_checkout_session(
         raise PlanNotFoundError(str(payload.plan_id))
 
     if not customer.stripe_customer_id or not plan.stripe_price_id:
-        from app.core.exceptions import BillingException
         raise BillingException(detail="Customer or plan is missing Stripe integration")
 
     # Determine checkout mode

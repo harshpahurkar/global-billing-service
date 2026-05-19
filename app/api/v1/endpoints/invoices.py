@@ -4,11 +4,16 @@ from uuid import UUID
 from typing import Optional
 
 from app.db.session import get_db
+from app.core.security import require_api_key
 from app.schemas.invoice import InvoiceCreate, InvoiceResponse, InvoiceListResponse
 from app.models.invoice import InvoiceStatus
 from app.services.invoice_service import InvoiceService
 
-router = APIRouter(prefix="/invoices", tags=["Invoices"])
+router = APIRouter(
+    prefix="/invoices",
+    tags=["Invoices"],
+    dependencies=[Depends(require_api_key)],
+)
 
 
 @router.post("", response_model=InvoiceResponse, status_code=201)

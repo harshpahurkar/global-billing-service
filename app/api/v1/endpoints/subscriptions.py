@@ -4,6 +4,7 @@ from uuid import UUID
 from typing import Optional
 
 from app.db.session import get_db
+from app.core.security import require_api_key
 from app.schemas.subscription import (
     SubscriptionCreate,
     SubscriptionUpgrade,
@@ -13,7 +14,11 @@ from app.schemas.subscription import (
 from app.models.subscription import SubscriptionStatus
 from app.services.subscription_service import SubscriptionService
 
-router = APIRouter(prefix="/subscriptions", tags=["Subscriptions"])
+router = APIRouter(
+    prefix="/subscriptions",
+    tags=["Subscriptions"],
+    dependencies=[Depends(require_api_key)],
+)
 
 
 @router.post("", response_model=SubscriptionResponse, status_code=201)

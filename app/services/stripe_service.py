@@ -302,19 +302,33 @@ class StripeService:
             logger.error("stripe_payment_intent_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
+    # Stripe accepts only these three values for Refund.reason.
+    _VALID_REFUND_REASONS = {"duplicate", "fraudulent", "requested_by_customer"}
+
     @staticmethod
     def create_refund(
         payment_intent_id: str,
         amount: Optional[int] = None,
         reason: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> stripe.Refund:
-        """Create a refund in Stripe. Amount in cents. None = full refund."""
+        """Create a refund in Stripe. Amount in cents. None = full refund.
+
+        `reason` must be one of: duplicate, fraudulent, requested_by_customer.
+        Any other value falls back to 'requested_by_customer' rather than
+        being silently dropped.
+        """
         try:
             refund_data: Dict[str, Any] = {"payment_intent": payment_intent_id}
             if amount is not None:
                 refund_data["amount"] = amount
             if reason:
-                refund_data["reason"] = "requested_by_customer"
+                refund_data["reason"] = (
+                    reason if reason in StripeService._VALID_REFUND_REASONS
+                    else "requested_by_customer"
+                )
+            if idempotency_key:
+                refund_data["idempotency_key"] = idempotency_key
 
             refund = stripe.Refund.create(**refund_data)
             logger.info("stripe_refund_created", refund_id=refund.id, amount=amount)

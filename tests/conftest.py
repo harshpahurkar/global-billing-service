@@ -1,3 +1,10 @@
+import os
+
+# Disable rate limiting during the test suite. Must be set before any module
+# that calls get_settings() is imported, otherwise the Settings lru_cache
+# captures APP_ENV=development.
+os.environ.setdefault("APP_ENV", "testing")
+
 import pytest
 import itertools
 from unittest.mock import MagicMock, patch

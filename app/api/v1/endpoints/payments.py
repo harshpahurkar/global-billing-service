@@ -1,3 +1,5 @@
+from decimal import Decimal, ROUND_HALF_UP
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -110,38 +112,55 @@ def get_payment(payment_id: UUID, db: Session = Depends(get_db)):
     return payment
 
 
+def _to_cents(amount: Decimal) -> int:
+    """Convert a Decimal currency amount to integer cents using bankers' input
+    but standard rounding so half-cent values round up consistently."""
+    return int((amount * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
 @router.post("/{payment_id}/refund", response_model=PaymentResponse)
 def refund_payment(
     payment_id: UUID,
     payload: PaymentRefund,
     db: Session = Depends(get_db),
 ):
-    """Refund a payment (full or partial)."""
+    """Refund a payment (full or partial).
+
+    All arithmetic is done in Decimal so multi-step partial refunds don't
+    accumulate binary-float rounding error.
+    """
     payment = db.query(Payment).filter(Payment.id == payment_id).first()
     if not payment:
         raise PaymentNotFoundError(str(payment_id))
 
-    if payment.status != PaymentStatus.SUCCEEDED:
+    # Allow multiple partial refunds: keep refunding while the payment is in
+    # SUCCEEDED or PARTIALLY_REFUNDED until refunded_amount catches up to total.
+    if payment.status not in (PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED):
         raise BillingException(detail="Can only refund succeeded payments")
 
-    refund_amount = payload.amount or float(payment.amount)
-    remaining = float(payment.amount) - float(payment.refunded_amount)
+    # payment.amount and payment.refunded_amount come back as Decimal from
+    # Numeric(10,2). payload.amount is float; round once at the boundary.
+    total = payment.amount
+    already_refunded = payment.refunded_amount or Decimal("0")
+    requested = Decimal(str(payload.amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) \
+        if payload.amount is not None else total
+    remaining = total - already_refunded
 
-    if refund_amount > remaining:
-        raise BillingException(detail=f"Refund amount ({refund_amount}) exceeds remaining ({remaining})")
-
-    # Refund in Stripe
-    if payment.stripe_payment_intent_id:
-        stripe_service = StripeService()
-        amount_cents = int(refund_amount * 100)
-        stripe_service.create_refund(
-            payment_intent_id=payment.stripe_payment_intent_id,
-            amount=amount_cents,
-            reason=payload.reason,
+    if requested > remaining:
+        raise BillingException(
+            detail=f"Refund amount ({requested}) exceeds remaining ({remaining})"
         )
 
-    payment.refunded_amount = float(payment.refunded_amount) + refund_amount
-    if payment.refunded_amount >= float(payment.amount):
+    if payment.stripe_payment_intent_id:
+        StripeService.create_refund(
+            payment_intent_id=payment.stripe_payment_intent_id,
+            amount=_to_cents(requested),
+            reason=payload.reason,
+            idempotency_key=f"refund:{payment.id}:{already_refunded}",
+        )
+
+    payment.refunded_amount = already_refunded + requested
+    if payment.refunded_amount >= total:
         payment.status = PaymentStatus.REFUNDED
     else:
         payment.status = PaymentStatus.PARTIALLY_REFUNDED

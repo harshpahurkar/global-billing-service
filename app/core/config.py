@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.APP_ENV == "production"
 
+    @property
+    def is_testing(self) -> bool:
+        return self.APP_ENV == "testing"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

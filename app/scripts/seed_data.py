@@ -1,18 +1,19 @@
 """Seed initial data for development and testing."""
 
 import json
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from app.db.session import SessionLocal  # noqa: E402
 from app.db.base import Base  # noqa: E402
-from app.db.session import engine  # noqa: E402
-from app.models.plan import Plan, PlanInterval  # noqa: E402
+from app.db.session import (
+    SessionLocal,  # noqa: E402
+    engine,  # noqa: E402
+)
 from app.models.customer import Customer  # noqa: E402
-
+from app.models.plan import Plan, PlanInterval  # noqa: E402
 
 # Default plans
 SEED_PLANS = [

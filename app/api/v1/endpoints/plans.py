@@ -1,42 +1,34 @@
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from app.core.exceptions import PlanNotFoundError
+from app.core.security import require_api_key
 from app.db.session import get_db
 from app.models.plan import Plan
-from app.schemas.plan import PlanCreate, PlanUpdate, PlanResponse, PlanListResponse
-from app.core.exceptions import PlanNotFoundError
+from app.schemas.plan import PlanCreate, PlanListResponse, PlanResponse, PlanUpdate
 from app.services.stripe_service import StripeService
 
-router = APIRouter(prefix="/plans", tags=["Plans"])
+router = APIRouter(
+    prefix="/plans",
+    tags=["Plans"],
+    dependencies=[Depends(require_api_key)],
+)
 
 
 @router.post("", response_model=PlanResponse, status_code=201)
 def create_plan(payload: PlanCreate, db: Session = Depends(get_db)):
-    """Create a new billing plan with Stripe product and price."""
-    stripe_service = StripeService()
+    """Create a new billing plan.
 
-    # Create product in Stripe
-    stripe_product = stripe_service.create_product(
-        name=payload.name,
-        description=payload.description,
-    )
-
-    # Create price in Stripe (amount in cents)
-    amount_cents = int(payload.amount * 100)
-    stripe_price = stripe_service.create_price(
-        product_id=stripe_product.id,
-        amount=amount_cents,
-        currency=payload.currency,
-        interval=payload.interval.value if payload.interval.value != "one_time" else None,
-        interval_count=payload.interval_count,
-    )
-
+    Local row is written first with no Stripe IDs, then Stripe Product and
+    Price are created with idempotency keys derived from the local UUID.
+    """
     plan = Plan(
         name=payload.name,
         description=payload.description,
-        stripe_product_id=stripe_product.id,
-        stripe_price_id=stripe_price.id,
+        stripe_product_id=None,
+        stripe_price_id=None,
         amount=payload.amount,
         currency=payload.currency.lower(),
         interval=payload.interval,
@@ -45,8 +37,29 @@ def create_plan(payload: PlanCreate, db: Session = Depends(get_db)):
         features=payload.features,
         sort_order=payload.sort_order,
     )
-
     db.add(plan)
+    db.commit()
+    db.refresh(plan)
+
+    local_id = str(plan.id)
+    stripe_product = StripeService.create_product(
+        name=payload.name,
+        description=payload.description,
+        metadata={"local_id": local_id},
+        idempotency_key=f"{local_id}:product",
+    )
+    amount_cents = int(payload.amount * 100)
+    stripe_price = StripeService.create_price(
+        product_id=stripe_product.id,
+        amount=amount_cents,
+        currency=payload.currency,
+        interval=payload.interval.value if payload.interval.value != "one_time" else None,
+        interval_count=payload.interval_count,
+        idempotency_key=f"{local_id}:price",
+    )
+
+    plan.stripe_product_id = stripe_product.id
+    plan.stripe_price_id = stripe_price.id
     db.commit()
     db.refresh(plan)
     return plan

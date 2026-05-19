@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean
+from sqlalchemy import Boolean, Column, String
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin

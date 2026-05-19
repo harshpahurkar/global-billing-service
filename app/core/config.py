@@ -1,7 +1,7 @@
-from pydantic_settings import BaseSettings
-from functools import lru_cache
-from typing import List
 import json
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -27,18 +27,20 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 60
 
     @property
-    def cors_origins_list(self) -> List[str]:
+    def cors_origins_list(self) -> list[str]:
         return json.loads(self.CORS_ORIGINS)
 
     @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    @property
+    def is_testing(self) -> bool:
+        return self.APP_ENV == "testing"
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     return Settings()

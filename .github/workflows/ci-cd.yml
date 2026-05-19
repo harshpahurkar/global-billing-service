@@ -50,8 +50,8 @@ jobs:
 
       - name: Run linting
         run: |
-          pip install flake8
-          flake8 app/ --max-line-length=120 --exclude=__pycache__
+          pip install ruff
+          ruff check app/ tests/
 
       - name: Run tests
         env:
@@ -60,7 +60,7 @@ jobs:
           STRIPE_WEBHOOK_SECRET: whsec_mock
           APP_ENV: testing
         run: |
-          pytest --cov=app --cov-report=xml -v
+          pytest --cov=app --cov-report=xml --cov-fail-under=80 -v
 
       - name: Upload coverage
         if: github.event_name == 'push'

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import stripe
 import structlog
-from typing import Optional, Dict, Any
 
 from app.core.config import get_settings
 from app.core.exceptions import StripeError
@@ -22,17 +23,21 @@ class StripeService:
     # --- Customers ---
 
     @staticmethod
-    def create_customer(email: str, name: str, metadata: Optional[Dict] = None) -> stripe.Customer:
+    def create_customer(
+        email: str,
+        name: str,
+        metadata: dict | None = None,
+        idempotency_key: str | None = None,
+    ) -> stripe.Customer:
         """Create a customer in Stripe."""
         try:
-            customer = stripe.Customer.create(
-                email=email,
-                name=name,
-                metadata=metadata or {},
-            )
+            kwargs: dict[str, Any] = {"email": email, "name": name, "metadata": metadata or {}}
+            if idempotency_key:
+                kwargs["idempotency_key"] = idempotency_key
+            customer = stripe.Customer.create(**kwargs)
             logger.info("stripe_customer_created", customer_id=customer.id, email=email)
             return customer
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_customer_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -43,7 +48,7 @@ class StripeService:
             customer = stripe.Customer.modify(stripe_customer_id, **kwargs)
             logger.info("stripe_customer_updated", customer_id=stripe_customer_id)
             return customer
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_customer_update_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -53,54 +58,65 @@ class StripeService:
         try:
             stripe.Customer.delete(stripe_customer_id)
             logger.info("stripe_customer_deleted", customer_id=stripe_customer_id)
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_customer_delete_failed", error=str(e))
             raise StripeError(detail=str(e))
 
     # --- Products & Prices ---
 
     @staticmethod
-    def create_product(name: str, description: Optional[str] = None) -> stripe.Product:
+    def create_product(
+        name: str,
+        description: str | None = None,
+        metadata: dict | None = None,
+        idempotency_key: str | None = None,
+    ) -> stripe.Product:
         """Create a product in Stripe."""
         try:
-            product = stripe.Product.create(
-                name=name,
-                description=description or "",
-            )
+            kwargs: dict[str, Any] = {
+                "name": name,
+                "description": description or "",
+                "metadata": metadata or {},
+            }
+            if idempotency_key:
+                kwargs["idempotency_key"] = idempotency_key
+            product = stripe.Product.create(**kwargs)
             logger.info("stripe_product_created", product_id=product.id)
             return product
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_product_create_failed", error=str(e))
             raise StripeError(detail=str(e))
+
+    _INTERVAL_MAP = {"monthly": "month", "yearly": "year", "weekly": "week"}
 
     @staticmethod
     def create_price(
         product_id: str,
         amount: int,
         currency: str,
-        interval: Optional[str] = None,
+        interval: str | None = None,
         interval_count: int = 1,
+        idempotency_key: str | None = None,
     ) -> stripe.Price:
         """Create a price in Stripe. Amount should be in cents."""
         try:
-            price_data: Dict[str, Any] = {
+            price_data: dict[str, Any] = {
                 "product": product_id,
                 "unit_amount": amount,
                 "currency": currency.lower(),
             }
             if interval and interval != "one_time":
                 price_data["recurring"] = {
-                    "interval": interval if interval != "yearly" else "year",
+                    "interval": StripeService._INTERVAL_MAP.get(interval, interval),
                     "interval_count": interval_count,
                 }
-                # Map our intervals to Stripe's
-                interval_map = {"monthly": "month", "yearly": "year", "weekly": "week"}
-                price_data["recurring"]["interval"] = interval_map.get(interval, interval)
+            if idempotency_key:
+                price_data["idempotency_key"] = idempotency_key
 
             price = stripe.Price.create(**price_data)
             logger.info("stripe_price_created", price_id=price.id, amount=amount)
             return price
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_price_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -111,22 +127,27 @@ class StripeService:
         customer_id: str,
         price_id: str,
         trial_days: int = 0,
+        metadata: dict | None = None,
+        idempotency_key: str | None = None,
     ) -> stripe.Subscription:
         """Create a subscription in Stripe."""
         try:
-            sub_data: Dict[str, Any] = {
+            sub_data: dict[str, Any] = {
                 "customer": customer_id,
                 "items": [{"price": price_id}],
                 "payment_behavior": "default_incomplete",
                 "expand": ["latest_invoice.payment_intent"],
+                "metadata": metadata or {},
             }
             if trial_days > 0:
                 sub_data["trial_period_days"] = trial_days
+            if idempotency_key:
+                sub_data["idempotency_key"] = idempotency_key
 
             subscription = stripe.Subscription.create(**sub_data)
             logger.info("stripe_subscription_created", subscription_id=subscription.id)
             return subscription
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_subscription_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -134,8 +155,16 @@ class StripeService:
     def update_subscription(
         stripe_subscription_id: str,
         new_price_id: str,
+        proration_behavior: str = "create_prorations",
     ) -> stripe.Subscription:
-        """Update (upgrade/downgrade) a subscription in Stripe."""
+        """Update a subscription in Stripe.
+
+        proration_behavior:
+          - "create_prorations" (default): prorate immediately. Use for upgrades.
+          - "none": no proration; the new price applies at the next renewal. Use
+            for downgrades so the customer keeps what they paid for.
+          - "always_invoice": prorate and invoice the difference now.
+        """
         try:
             subscription = stripe.Subscription.retrieve(stripe_subscription_id)
             updated = stripe.Subscription.modify(
@@ -144,11 +173,15 @@ class StripeService:
                     "id": subscription["items"]["data"][0].id,
                     "price": new_price_id,
                 }],
-                proration_behavior="create_prorations",
+                proration_behavior=proration_behavior,
             )
-            logger.info("stripe_subscription_updated", subscription_id=stripe_subscription_id)
+            logger.info(
+                "stripe_subscription_updated",
+                subscription_id=stripe_subscription_id,
+                proration_behavior=proration_behavior,
+            )
             return updated
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_subscription_update_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -172,7 +205,7 @@ class StripeService:
                 at_period_end=at_period_end,
             )
             return subscription
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_subscription_cancel_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -186,7 +219,7 @@ class StripeService:
             )
             logger.info("stripe_subscription_reactivated", subscription_id=stripe_subscription_id)
             return subscription
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_subscription_reactivate_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -195,20 +228,26 @@ class StripeService:
     @staticmethod
     def create_invoice(
         customer_id: str,
-        description: Optional[str] = None,
+        description: str | None = None,
         currency: str = "usd",
+        metadata: dict | None = None,
+        idempotency_key: str | None = None,
     ) -> stripe.Invoice:
         """Create an invoice in Stripe."""
         try:
-            invoice = stripe.Invoice.create(
-                customer=customer_id,
-                description=description or "Billing invoice",
-                currency=currency.lower(),
-                auto_advance=True,
-            )
+            kwargs: dict[str, Any] = {
+                "customer": customer_id,
+                "description": description or "Billing invoice",
+                "currency": currency.lower(),
+                "auto_advance": True,
+                "metadata": metadata or {},
+            }
+            if idempotency_key:
+                kwargs["idempotency_key"] = idempotency_key
+            invoice = stripe.Invoice.create(**kwargs)
             logger.info("stripe_invoice_created", invoice_id=invoice.id)
             return invoice
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_invoice_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -219,7 +258,7 @@ class StripeService:
             invoice = stripe.Invoice.pay(stripe_invoice_id)
             logger.info("stripe_invoice_paid", invoice_id=stripe_invoice_id)
             return invoice
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_invoice_pay_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -230,7 +269,7 @@ class StripeService:
             invoice = stripe.Invoice.void_invoice(stripe_invoice_id)
             logger.info("stripe_invoice_voided", invoice_id=stripe_invoice_id)
             return invoice
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_invoice_void_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -241,43 +280,61 @@ class StripeService:
         amount: int,
         currency: str,
         customer_id: str,
-        description: Optional[str] = None,
-        metadata: Optional[Dict] = None,
+        description: str | None = None,
+        metadata: dict | None = None,
+        idempotency_key: str | None = None,
     ) -> stripe.PaymentIntent:
         """Create a payment intent in Stripe. Amount in cents."""
         try:
-            intent = stripe.PaymentIntent.create(
-                amount=amount,
-                currency=currency.lower(),
-                customer=customer_id,
-                description=description,
-                metadata=metadata or {},
-                automatic_payment_methods={"enabled": True},
-            )
+            kwargs: dict[str, Any] = {
+                "amount": amount,
+                "currency": currency.lower(),
+                "customer": customer_id,
+                "description": description,
+                "metadata": metadata or {},
+                "automatic_payment_methods": {"enabled": True},
+            }
+            if idempotency_key:
+                kwargs["idempotency_key"] = idempotency_key
+            intent = stripe.PaymentIntent.create(**kwargs)
             logger.info("stripe_payment_intent_created", intent_id=intent.id, amount=amount)
             return intent
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_payment_intent_create_failed", error=str(e))
             raise StripeError(detail=str(e))
+
+    # Stripe accepts only these three values for Refund.reason.
+    _VALID_REFUND_REASONS = {"duplicate", "fraudulent", "requested_by_customer"}
 
     @staticmethod
     def create_refund(
         payment_intent_id: str,
-        amount: Optional[int] = None,
-        reason: Optional[str] = None,
+        amount: int | None = None,
+        reason: str | None = None,
+        idempotency_key: str | None = None,
     ) -> stripe.Refund:
-        """Create a refund in Stripe. Amount in cents. None = full refund."""
+        """Create a refund in Stripe. Amount in cents. None = full refund.
+
+        `reason` must be one of: duplicate, fraudulent, requested_by_customer.
+        Any other value falls back to 'requested_by_customer' rather than
+        being silently dropped.
+        """
         try:
-            refund_data: Dict[str, Any] = {"payment_intent": payment_intent_id}
+            refund_data: dict[str, Any] = {"payment_intent": payment_intent_id}
             if amount is not None:
                 refund_data["amount"] = amount
             if reason:
-                refund_data["reason"] = "requested_by_customer"
+                refund_data["reason"] = (
+                    reason if reason in StripeService._VALID_REFUND_REASONS
+                    else "requested_by_customer"
+                )
+            if idempotency_key:
+                refund_data["idempotency_key"] = idempotency_key
 
             refund = stripe.Refund.create(**refund_data)
             logger.info("stripe_refund_created", refund_id=refund.id, amount=amount)
             return refund
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_refund_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -302,7 +359,7 @@ class StripeService:
             )
             logger.info("stripe_checkout_session_created", session_id=session.id)
             return session
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_checkout_session_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -318,7 +375,7 @@ class StripeService:
                 settings.STRIPE_WEBHOOK_SECRET,
             )
             return event
-        except stripe.error.SignatureVerificationError:
+        except stripe.SignatureVerificationError:
             from app.core.exceptions import WebhookVerificationError
             raise WebhookVerificationError()
         except ValueError:

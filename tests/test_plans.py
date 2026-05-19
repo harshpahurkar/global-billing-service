@@ -1,6 +1,5 @@
 """Tests for plan management endpoints."""
 
-import pytest
 
 
 class TestPlanEndpoints:

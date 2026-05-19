@@ -14,6 +14,8 @@ from app.models.plan import Plan  # noqa: F401
 from app.models.subscription import Subscription  # noqa: F401
 from app.models.invoice import Invoice  # noqa: F401
 from app.models.payment import Payment  # noqa: F401
+from app.models.api_key import APIKey  # noqa: F401
+from app.models.stripe_event import ProcessedStripeEvent  # noqa: F401
 
 config = context.config
 

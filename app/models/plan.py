@@ -1,6 +1,8 @@
-from sqlalchemy import Column, String, Integer, Boolean, Numeric, Enum as SQLEnum
-from sqlalchemy.orm import relationship
 import enum
+
+from sqlalchemy import Boolean, Column, Integer, Numeric, String
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.orm import relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
 

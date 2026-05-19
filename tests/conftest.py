@@ -1,19 +1,34 @@
-import pytest
+import os
+
+# Disable rate limiting during the test suite. Must be set before any module
+# that calls get_settings() is imported, otherwise the Settings lru_cache
+# captures APP_ENV=development.
+os.environ.setdefault("APP_ENV", "testing")
+
 import itertools
 from unittest.mock import MagicMock, patch
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from fastapi.testclient import TestClient
 
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.core.security import generate_api_key, hash_api_key
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.models.api_key import APIKey
 
+# In-memory SQLite, shared across connections via StaticPool so the API
+# request handler and the test fixture see the same data.
+SQLALCHEMY_TEST_URL = "sqlite:///:memory:"
 
-# Use SQLite in-memory for tests
-SQLALCHEMY_TEST_URL = "sqlite:///./test.db"
-
-engine = create_engine(SQLALCHEMY_TEST_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    SQLALCHEMY_TEST_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -30,8 +45,32 @@ def db_session():
 
 
 @pytest.fixture(scope="function")
-def client(db_session):
-    """Create a test client with a fresh database."""
+def api_key(db_session):
+    """Seed an active API key and return the plaintext value."""
+    plain = generate_api_key()
+    db_session.add(APIKey(name="test-key", hashed_key=hash_api_key(plain), is_active=True))
+    db_session.commit()
+    return plain
+
+
+@pytest.fixture(scope="function")
+def client(db_session, api_key):
+    """Create a test client with a fresh DB and the X-API-Key header pre-set."""
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app, headers={"X-API-Key": api_key}) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def unauthenticated_client(db_session):
+    """Test client without an API key, for testing auth rejection."""
     def override_get_db():
         try:
             yield db_session
@@ -47,7 +86,14 @@ def client(db_session):
 @pytest.fixture
 def mock_stripe():
     """Mock all Stripe API calls."""
+    import stripe as real_stripe
+
     with patch("app.services.stripe_service.stripe") as mock:
+        # Preserve the real exception classes so `except stripe.StripeError`
+        # in service code resolves to a real BaseException subclass.
+        mock.StripeError = real_stripe.StripeError
+        mock.SignatureVerificationError = real_stripe.SignatureVerificationError
+
         # Counters for unique IDs
         _cus_counter = itertools.count(1)
         _prod_counter = itertools.count(1)

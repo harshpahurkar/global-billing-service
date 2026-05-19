@@ -1,14 +1,19 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from uuid import UUID
-from typing import Optional
 
+from app.core.security import require_api_key
 from app.db.session import get_db
-from app.schemas.invoice import InvoiceCreate, InvoiceResponse, InvoiceListResponse
 from app.models.invoice import InvoiceStatus
+from app.schemas.invoice import InvoiceCreate, InvoiceListResponse, InvoiceResponse
 from app.services.invoice_service import InvoiceService
 
-router = APIRouter(prefix="/invoices", tags=["Invoices"])
+router = APIRouter(
+    prefix="/invoices",
+    tags=["Invoices"],
+    dependencies=[Depends(require_api_key)],
+)
 
 
 @router.post("", response_model=InvoiceResponse, status_code=201)
@@ -33,8 +38,8 @@ def create_invoice(
 
 @router.get("", response_model=InvoiceListResponse)
 def list_invoices(
-    customer_id: Optional[UUID] = Query(None),
-    status: Optional[InvoiceStatus] = Query(None),
+    customer_id: UUID | None = Query(None),
+    status: InvoiceStatus | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),

@@ -32,7 +32,7 @@ class StripeService:
             )
             logger.info("stripe_customer_created", customer_id=customer.id, email=email)
             return customer
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_customer_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -43,7 +43,7 @@ class StripeService:
             customer = stripe.Customer.modify(stripe_customer_id, **kwargs)
             logger.info("stripe_customer_updated", customer_id=stripe_customer_id)
             return customer
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_customer_update_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -53,7 +53,7 @@ class StripeService:
         try:
             stripe.Customer.delete(stripe_customer_id)
             logger.info("stripe_customer_deleted", customer_id=stripe_customer_id)
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_customer_delete_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -69,7 +69,7 @@ class StripeService:
             )
             logger.info("stripe_product_created", product_id=product.id)
             return product
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_product_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -100,7 +100,7 @@ class StripeService:
             price = stripe.Price.create(**price_data)
             logger.info("stripe_price_created", price_id=price.id, amount=amount)
             return price
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_price_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -126,7 +126,7 @@ class StripeService:
             subscription = stripe.Subscription.create(**sub_data)
             logger.info("stripe_subscription_created", subscription_id=subscription.id)
             return subscription
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_subscription_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -148,7 +148,7 @@ class StripeService:
             )
             logger.info("stripe_subscription_updated", subscription_id=stripe_subscription_id)
             return updated
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_subscription_update_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -172,7 +172,7 @@ class StripeService:
                 at_period_end=at_period_end,
             )
             return subscription
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_subscription_cancel_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -186,7 +186,7 @@ class StripeService:
             )
             logger.info("stripe_subscription_reactivated", subscription_id=stripe_subscription_id)
             return subscription
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_subscription_reactivate_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -208,7 +208,7 @@ class StripeService:
             )
             logger.info("stripe_invoice_created", invoice_id=invoice.id)
             return invoice
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_invoice_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -219,7 +219,7 @@ class StripeService:
             invoice = stripe.Invoice.pay(stripe_invoice_id)
             logger.info("stripe_invoice_paid", invoice_id=stripe_invoice_id)
             return invoice
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_invoice_pay_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -230,7 +230,7 @@ class StripeService:
             invoice = stripe.Invoice.void_invoice(stripe_invoice_id)
             logger.info("stripe_invoice_voided", invoice_id=stripe_invoice_id)
             return invoice
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_invoice_void_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -256,7 +256,7 @@ class StripeService:
             )
             logger.info("stripe_payment_intent_created", intent_id=intent.id, amount=amount)
             return intent
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_payment_intent_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -277,7 +277,7 @@ class StripeService:
             refund = stripe.Refund.create(**refund_data)
             logger.info("stripe_refund_created", refund_id=refund.id, amount=amount)
             return refund
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_refund_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -302,7 +302,7 @@ class StripeService:
             )
             logger.info("stripe_checkout_session_created", session_id=session.id)
             return session
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error("stripe_checkout_session_create_failed", error=str(e))
             raise StripeError(detail=str(e))
 
@@ -318,7 +318,7 @@ class StripeService:
                 settings.STRIPE_WEBHOOK_SECRET,
             )
             return event
-        except stripe.error.SignatureVerificationError:
+        except stripe.SignatureVerificationError:
             from app.core.exceptions import WebhookVerificationError
             raise WebhookVerificationError()
         except ValueError:

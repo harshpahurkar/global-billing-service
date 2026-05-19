@@ -154,8 +154,16 @@ class StripeService:
     def update_subscription(
         stripe_subscription_id: str,
         new_price_id: str,
+        proration_behavior: str = "create_prorations",
     ) -> stripe.Subscription:
-        """Update (upgrade/downgrade) a subscription in Stripe."""
+        """Update a subscription in Stripe.
+
+        proration_behavior:
+          - "create_prorations" (default): prorate immediately. Use for upgrades.
+          - "none": no proration; the new price applies at the next renewal. Use
+            for downgrades so the customer keeps what they paid for.
+          - "always_invoice": prorate and invoice the difference now.
+        """
         try:
             subscription = stripe.Subscription.retrieve(stripe_subscription_id)
             updated = stripe.Subscription.modify(
@@ -164,9 +172,13 @@ class StripeService:
                     "id": subscription["items"]["data"][0].id,
                     "price": new_price_id,
                 }],
-                proration_behavior="create_prorations",
+                proration_behavior=proration_behavior,
             )
-            logger.info("stripe_subscription_updated", subscription_id=stripe_subscription_id)
+            logger.info(
+                "stripe_subscription_updated",
+                subscription_id=stripe_subscription_id,
+                proration_behavior=proration_behavior,
+            )
             return updated
         except stripe.StripeError as e:
             logger.error("stripe_subscription_update_failed", error=str(e))
